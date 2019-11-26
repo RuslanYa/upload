@@ -2,6 +2,7 @@
 
 namespace app\controllers;
 
+use app\widgets\Alert;
 use Yii;
 use yii\filters\AccessControl;
 use yii\helpers\FileHelper;
@@ -59,9 +60,7 @@ class SiteController extends Controller
         ];
     }
 
-    public function actionRespons($inf){
-        return substr($inf,1,3);
-    }
+
 
     /**
      * Displays homepage.
@@ -142,84 +141,6 @@ class SiteController extends Controller
         return $this->render('about');
     }
 
-    public function actionUpload()
-    {
-
-        $model = new UploadForm();
-
-//        $path = Yii::getAlias('@webroot');
-//        $path.='/uploads/' . $_SESSION['full_dir_path'];
-//        var_dump($path); die();
-//        chdir($path);
-        if (Yii::$app->request->isPost) {
-
-            unset($_GET['param']);
-            $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
-
-            if ($model->upload()) {
-                // file is uploaded successfully
-
-//                return $this->render('upload', ['model' => $model]);
-            }
-
-
-            if (isset($_POST['new_dir']) and isset($_SESSION['full_dir_path'])){
-
-                FileHelper::createDirectory('uploads/' . $_SESSION['full_dir_path'] .'/'. $_POST['new_dir']);
-
-           }
-        }
-
-    // Экспериментальная часть
-
-
-
-
-        $session = $_SESSION['full_dir_path_arr'];
-
-
-        if(isset($_GET['param']) and $_GET['param'] == '..' and count($session) > 1){ array_splice($session, -1,1);}
-        if(isset($_GET['param']) and ($_GET['param'] != '..')){ $session[] = $_GET['param'];}
-//        $session[] = !isset($_GET['param'])? :$_GET['param'];
-        $_SESSION['full_dir_path_arr'] = $session;
-        $_SESSION['full_dir_path'] = 0;
-        $str_session = '';
-//        var_dump($session);
-//        die();
-        foreach ($session as $item){
-            $str_session .= $item .'/';
-        }
-        $_SESSION['full_dir_path'] = $str_session;
-//        var_dump($_SESSION['full_dir_path']);
-//        var_dump($session);
-//var_dump($_SESSION['full_dir_path_arr']);
-//die();
-
-
-
-        $path = Yii::getAlias('@webroot');
-        $path.='/uploads/' . $_SESSION['full_dir_path'];
-
-        $tree = scandir($path);
-        chdir($path);
-        $table = '<table class="table table-striped">';
-
-        foreach ($tree as $key=>$item){
-
-            if (is_dir($item) && $item !='.'){
-
-                $table .= "<tr><td><a href='upload?param=$item' class='file-link' data-inf='$item'>$item</a></td><td><a href='' class='delete'>Delete</a></td></tr>";
-
-            }else{
-                if($item !='.') {$table .= "<tr><td>$item</td><td><a href='' class='delete'>Delete</a></td></tr>";}
-            }
-        }
-        $table .= '</table>';
-
-        return $this->render('upload', ['model' => $model, 'table' => $table]);
-    }
-
-
 
     public function actionSignup(){
         if (!Yii::$app->user->isGuest) {
@@ -241,6 +162,122 @@ class SiteController extends Controller
     }
 
 
+
+
+
+    public function actionUpload()
+    {
+
+        $model = new UploadForm();
+
+        if (Yii::$app->request->isPost) {
+
+            unset($_GET['param']);
+            $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
+
+            if ($model->upload()) {
+                // file is uploaded successfully
+
+//                return $this->render('upload', ['model' => $model]);
+                $this->redirect('upload');
+            }
+
+            if (isset($_POST['new_dir']) and isset($_SESSION['full_dir_path'])){
+
+                FileHelper::createDirectory('uploads/' . $_SESSION['full_dir_path'] .'/'. $_POST['new_dir']);
+                $this->redirect('upload');
+            }
+        }
+
+        // Экспериментальная часть
+
+        $session = $_SESSION['full_dir_path_arr'];
+
+
+        if(isset($_GET['param']) and $_GET['param'] == '..' and count($session) > 1){ array_splice($session, -1,1);}
+        if(isset($_GET['param']) and ($_GET['param'] != '..')){ $session[] = $_GET['param'];}
+
+
+        $_SESSION['full_dir_path_arr'] = $session;
+        $_SESSION['full_dir_path'] = 0;
+        $str_session = '';
+
+        foreach ($session as $item){
+            $str_session .= $item .'/';
+        }
+        $_SESSION['full_dir_path'] = $str_session;
+
+
+        $path = Yii::getAlias('@webroot');
+        $path.='/uploads/' . $_SESSION['full_dir_path'];
+
+        chdir($path);
+
+        $tree = array_diff(scandir($path), ['.']);
+
+
+        return $this->render('upload', ['model' => $model, 'tree' => $tree, 'path' => $path]);
+    }
+
+
+    public function actionDelete(){
+
+        $path =  $_GET['path'] . $_GET['name'];
+        function mf_removeDir( $path )
+        {
+            if ( $content_del_cat = glob( $path.'/*') )
+            {
+                foreach ( $content_del_cat as $object )
+                {
+                    if ( is_dir( $object ) ) {
+                        mf_removeDir( $object );
+                    }
+                    else {
+                        @chmod( $object, 0777 );
+                        unlink( $object );
+                    }
+                }
+            }
+            @chmod( $object, 0777 );
+            rmdir( $path );
+        }
+        is_dir($path) ? mf_removeDir($path) : unlink($path);
+    }
+
+    public function actionRename(){
+
+        $oldname =  $_GET['path'] . $_GET['name'];
+        $newname = $_GET['path'] . $_GET['newname'];
+        rename($oldname, $newname);
+    }
+
+    public function actionDownload(){
+        function file_force_download($file) {
+            if (file_exists($file)) {
+                // сбрасываем буфер вывода PHP, чтобы избежать переполнения памяти выделенной под скрипт
+                // если этого не сделать файл будет читаться в память полностью!
+                if (ob_get_level()) {
+                    ob_end_clean();
+                }
+                // заставляем браузер показать окно сохранения файла
+                header('Content-Description: File Transfer');
+                header('Content-Type: application/octet-stream');
+                header('Content-Disposition: attachment; filename=' . basename($file));
+                header('Content-Transfer-Encoding: binary');
+                header('Expires: 0');
+                header('Cache-Control: must-revalidate');
+                header('Pragma: public');
+                header('Content-Length: ' . filesize($file));
+                // читаем файл и отправляем его пользователю
+                readfile($file);
+                exit;
+            }
+        }
+
+            $file = $_GET['path'] . $_GET['name'];
+
+        file_force_download($file);
+    }
 
 
 }
