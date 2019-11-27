@@ -154,6 +154,7 @@ class SiteController extends Controller
             $user->login = $model->login;
             $user->parol = $model->parol;
             if($user->save()){
+                FileHelper::createDirectory('uploads/'. $user->id);
                 return $this->goHome();
             }
         }
